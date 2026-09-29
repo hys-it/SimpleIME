@@ -1,0 +1,365 @@
+# Codex Step Script：Android 最單純注音鍵盤 App
+# 目標：建立一個最簡單的 Android 注音輸入法 IME
+# 特色：倚天注音鍵盤排列、候選字列、黑底綠字風格、基本可輸入中文
+# 技術：Kotlin + Android InputMethodService
+
+你是資深 Android/Kotlin 工程師。請依照以下步驟建立一個 Android Studio 專案。
+專案目標是「最單純的注音鍵盤 App」，不是完整商業輸入法。
+先做可用版本，不做雲端、不做學習、不做 AI、不做複雜詞頻。
+
+============================================================
+STEP 1：建立 Android 專案
+============================================================
+
+建立一個新的 Android 專案：
+
+Project name: SimpleIME
+Package name: com.lisam.simpleime
+Language: Kotlin
+Minimum SDK: 23
+Target SDK: 最新可用版本
+
+專案必須包含：
+
+1. MainActivity
+2. SimpleZhuyinImeService
+3. KeyboardView 或自訂 LinearLayout 鍵盤 UI
+4. CandidateView 或 RecyclerView 候選字列
+5. 一個簡單注音字典表
+
+============================================================
+STEP 2：AndroidManifest.xml 設定輸入法服務
+============================================================
+
+在 AndroidManifest.xml 加入 InputMethodService：
+
+<service
+    android:name=".SimpleZhuyinImeService"
+    android:permission="android.permission.BIND_INPUT_METHOD"
+    android:exported="true">
+    <intent-filter>
+        <action android:name="android.view.InputMethod" />
+    </intent-filter>
+    <meta-data
+        android:name="android.view.im"
+        android:resource="@xml/method" />
+</service>
+
+建立 res/xml/method.xml：
+
+<?xml version="1.0" encoding="utf-8"?>
+<input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.lisam.simpleime.MainActivity"
+    android:isDefault="false" />
+
+============================================================
+STEP 3：MainActivity 功能
+============================================================
+
+MainActivity 不需要複雜功能，只要顯示說明文字：
+
+「請到 Android 系統設定 > 鍵盤與輸入法 > 啟用 SimpleIME」
+
+並提供一個按鈕開啟系統輸入法設定：
+
+startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
+
+============================================================
+STEP 4：建立 SimpleZhuyinImeService
+============================================================
+
+建立 Kotlin 類別：
+
+class SimpleZhuyinImeService : InputMethodService() {
+
+    private lateinit var rootView: LinearLayout
+    private lateinit var composingText: TextView
+    private lateinit var candidateRow: LinearLayout
+
+    private var currentZhuyin = StringBuilder()
+
+    override fun onCreateInputView(): View {
+        rootView = LinearLayout(this)
+        rootView.orientation = LinearLayout.VERTICAL
+        rootView.setBackgroundColor(Color.BLACK)
+
+        composingText = TextView(this)
+        composingText.setTextColor(Color.GREEN)
+        composingText.textSize = 22f
+        composingText.setPadding(12, 8, 12, 8)
+        composingText.text = ""
+        rootView.addView(composingText)
+
+        candidateRow = LinearLayout(this)
+        candidateRow.orientation = LinearLayout.HORIZONTAL
+        candidateRow.setPadding(8, 4, 8, 4)
+        rootView.addView(candidateRow)
+
+        createKeyboard()
+
+        return rootView
+    }
+}
+
+============================================================
+STEP 5：建立倚天注音鍵盤排列
+============================================================
+
+鍵盤使用以下排列。
+請用 Button 動態建立，不要先用 XML 寫死。
+
+第一列：ㄅ ㄉ ˇ ˋ ㄓ ˊ ˙ ㄚ ㄞ ㄢ ㄦ
+第二列：ㄆ ㄊ ㄍ ㄐ ㄔ ㄗ ㄧ ㄛ ㄟ ㄣ
+第三列：ㄇ ㄋ ㄎ ㄑ ㄕ ㄘ ㄨ ㄜ ㄠ ㄤ
+第四列：ㄈ ㄌ ㄏ ㄒ ㄖ ㄙ ㄩ ㄝ ㄡ ㄥ
+第五列：退格 空白 送出
+
+建立函式：
+
+private fun createKeyboard() {
+    val rows = listOf(
+        listOf("ㄅ", "ㄉ", "ˇ", "ˋ", "ㄓ", "ˊ", "˙", "ㄚ", "ㄞ", "ㄢ", "ㄦ"),
+        listOf("ㄆ", "ㄊ", "ㄍ", "ㄐ", "ㄔ", "ㄗ", "ㄧ", "ㄛ", "ㄟ", "ㄣ"),
+        listOf("ㄇ", "ㄋ", "ㄎ", "ㄑ", "ㄕ", "ㄘ", "ㄨ", "ㄜ", "ㄠ", "ㄤ"),
+        listOf("ㄈ", "ㄌ", "ㄏ", "ㄒ", "ㄖ", "ㄙ", "ㄩ", "ㄝ", "ㄡ", "ㄥ")
+    )
+
+    for (row in rows) {
+        val rowLayout = LinearLayout(this)
+        rowLayout.orientation = LinearLayout.HORIZONTAL
+        rowLayout.gravity = Gravity.CENTER
+        rootView.addView(rowLayout)
+
+        for (key in row) {
+            val button = Button(this)
+            button.text = key
+            button.textSize = 20f
+            button.setTextColor(Color.GREEN)
+            button.setBackgroundColor(Color.rgb(20, 20, 20))
+            button.setOnClickListener { onZhuyinKey(key) }
+            rowLayout.addView(button, LinearLayout.LayoutParams(0, 64, 1f))
+        }
+    }
+
+    val controlRow = LinearLayout(this)
+    controlRow.orientation = LinearLayout.HORIZONTAL
+    rootView.addView(controlRow)
+
+    addControlButton(controlRow, "退格") { onBackspace() }
+    addControlButton(controlRow, "空白") { onSpace() }
+    addControlButton(controlRow, "送出") { commitCurrentText() }
+}
+
+============================================================
+STEP 6：處理按鍵輸入
+============================================================
+
+建立以下函式：
+
+private fun onZhuyinKey(key: String) {
+    currentZhuyin.append(key)
+    updateComposingText()
+    updateCandidates()
+}
+
+private fun updateComposingText() {
+    composingText.text = currentZhuyin.toString()
+}
+
+private fun onBackspace() {
+    if (currentZhuyin.isNotEmpty()) {
+        currentZhuyin.deleteCharAt(currentZhuyin.length - 1)
+        updateComposingText()
+        updateCandidates()
+    } else {
+        currentInputConnection.deleteSurroundingText(1, 0)
+    }
+}
+
+private fun onSpace() {
+    val candidates = getCandidates(currentZhuyin.toString())
+    if (candidates.isNotEmpty()) {
+        commitText(candidates[0])
+    } else {
+        currentInputConnection.commitText(" ", 1)
+    }
+}
+
+private fun commitCurrentText() {
+    if (currentZhuyin.isNotEmpty()) {
+        val candidates = getCandidates(currentZhuyin.toString())
+        if (candidates.isNotEmpty()) {
+            commitText(candidates[0])
+        } else {
+            currentInputConnection.commitText(currentZhuyin.toString(), 1)
+            currentZhuyin.clear()
+            updateComposingText()
+            updateCandidates()
+        }
+    }
+}
+
+private fun commitText(text: String) {
+    currentInputConnection.commitText(text, 1)
+    currentZhuyin.clear()
+    updateComposingText()
+    updateCandidates()
+}
+
+============================================================
+STEP 7：建立簡單注音字典
+============================================================
+
+先不要用 SQLite。
+第一版用 Map<String, List<String>> 即可。
+
+private val dictionary = mapOf(
+    "ㄓㄨㄥ" to listOf("中", "種", "重", "終", "鐘"),
+    "ㄍㄨㄛˊ" to listOf("國"),
+    "ㄊㄞˊ" to listOf("台", "臺", "抬"),
+    "ㄅㄟˇ" to listOf("北"),
+    "ㄊㄞˊㄅㄟˇ" to listOf("台北", "臺北"),
+    "ㄋㄧˇ" to listOf("你", "妳"),
+    "ㄏㄠˇ" to listOf("好"),
+    "ㄋㄧˇㄏㄠˇ" to listOf("你好", "妳好"),
+    "ㄨㄛˇ" to listOf("我"),
+    "ㄕˋ" to listOf("是", "事", "市", "世", "試"),
+    "ㄉㄜ˙" to listOf("的", "得", "地"),
+    "ㄌㄜ˙" to listOf("了"),
+    "ㄇㄣˊ" to listOf("們", "門"),
+    "ㄖㄣˊ" to listOf("人"),
+    "ㄉㄚˋ" to listOf("大"),
+    "ㄒㄧㄠˇ" to listOf("小"),
+    "ㄕㄨㄟˇ" to listOf("水"),
+    "ㄏㄨㄛˇ" to listOf("火"),
+    "ㄕㄢ" to listOf("山"),
+    "ㄏㄞˇ" to listOf("海")
+)
+
+private fun getCandidates(code: String): List<String> {
+    return dictionary[code] ?: emptyList()
+}
+
+============================================================
+STEP 8：候選字列
+============================================================
+
+建立 updateCandidates()：
+
+private fun updateCandidates() {
+    candidateRow.removeAllViews()
+
+    val candidates = getCandidates(currentZhuyin.toString())
+
+    for (word in candidates) {
+        val tv = TextView(this)
+        tv.text = word
+        tv.textSize = 24f
+        tv.setTextColor(Color.GREEN)
+        tv.setPadding(20, 8, 20, 8)
+        tv.setOnClickListener { commitText(word) }
+        candidateRow.addView(tv)
+    }
+}
+
+============================================================
+STEP 9：控制鍵 Button 工具函式
+============================================================
+
+建立 addControlButton：
+
+private fun addControlButton(row: LinearLayout, label: String, action: () -> Unit) {
+    val button = Button(this)
+    button.text = label
+    button.textSize = 18f
+    button.setTextColor(Color.GREEN)
+    button.setBackgroundColor(Color.rgb(30, 30, 30))
+    button.setOnClickListener { action() }
+    row.addView(button, LinearLayout.LayoutParams(0, 72, 1f))
+}
+
+============================================================
+STEP 10：基本測試項目
+============================================================
+
+完成後請確認：
+
+1. App 可安裝
+2. 系統設定內可看到 SimpleIME
+3. 可啟用輸入法
+4. 在記事本或任何輸入框可切換到 SimpleIME
+5. 按 ㄓ ㄨ ㄥ 可出現候選字：中、種、重、終、鐘
+6. 點候選字可輸出中文
+7. 空白鍵可選第一個候選字
+8. 退格可刪除注音
+9. 沒有注音時退格可刪除輸入框內文字
+10. 黑底綠字風格正常顯示
+
+============================================================
+STEP 11：第一版不要做的功能
+============================================================
+
+第一版請不要做：
+
+1. 雲端同步
+2. 使用者詞庫
+3. AI 選字
+4. 自動學習
+5. 複雜斷詞
+6. 注音自動校正
+7. 滑動輸入
+8. 語音輸入
+9. 廣告
+10. 權限收集
+
+保持單純、穩定、可用。
+
+============================================================
+STEP 12：第二版可擴充項目
+============================================================
+
+第一版成功後，再考慮：
+
+1. 字典改成 SQLite
+2. 匯入更多注音碼表
+3. 支援詞語候選
+4. 支援長句輸入
+5. 支援實體鍵盤
+6. 加入 DOS 倚天風格字型
+7. 加入鍵盤高度設定
+8. 加入橫向模式
+9. 加入候選字翻頁
+10. 加入符號鍵盤
+
+============================================================
+STEP 13：請輸出完整程式碼
+============================================================
+
+請輸出完整可編譯 Android Studio 專案需要的主要檔案：
+
+1. AndroidManifest.xml
+2. res/xml/method.xml
+3. MainActivity.kt
+4. SimpleZhuyinImeService.kt
+5. build.gradle 或 build.gradle.kts
+
+請確保程式碼可以直接編譯。
+如果 Android 新版不建議使用舊 KeyboardView，請直接使用自訂 LinearLayout + Button，不要用 deprecated KeyboardView。
+
+============================================================
+補充要求
+============================================================
+
+UI 風格：
+- 黑底
+- 綠字
+- 類 DOS 倚天風格
+
+功能優先順序：
+1. 能啟用輸入法
+2. 能按注音鍵
+3. 能顯示候選字
+4. 能輸出中文
+5. 再美化 UI
+
+請先完成最小可用版本 MVP。

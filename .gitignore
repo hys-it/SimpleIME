@@ -1,0 +1,32 @@
+# Android Studio / IntelliJ
+.idea/
+*.iml
+
+# Gradle and Kotlin caches
+.gradle/
+.gradle-tmp/
+.kotlin/
+**/build/
+
+# Local Android SDK path
+local.properties
+
+# Generated packages and native build output
+*.apk
+*.aab
+*.ap_
+*.dex
+.externalNativeBuild/
+.cxx/
+
+# Signing credentials
+*.jks
+*.keystore
+keystore.properties
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Locally downloaded Gradle distribution
+/gradle-*-bin.zip
